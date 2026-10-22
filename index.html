@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Albion 闇市場クラフト利益計算</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1f2328;--mu:#6b7280;--bd:#dcd9d0;--ac:#b4532a;--ok:#15803d;--ng:#b91c1c;--hi:#fdf1d8;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16181c;--card:#1f2228;--tx:#e8e6e1;--mu:#9aa0a6;--bd:#33373d;--ac:#e08a5c;--ok:#4ade80;--ng:#f87171;--hi:#3a3220;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#16181c;--card:#1f2228;--tx:#e8e6e1;--mu:#9aa0a6;--bd:#33373d;--ac:#e08a5c;--ok:#4ade80;--ng:#f87171;--hi:#3a3220;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:12px}
+h1{font-size:18px;margin:4px 0 2px}h2{font-size:15px;margin:0 0 8px}
+.mu{color:var(--mu);font-size:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin:10px 0}
+.bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:8px}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--mu);gap:2px}
+input,select,textarea{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:5px 6px;width:100%;box-sizing:border-box;min-width:0}
+button{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:6px;padding:5px 10px;cursor:pointer;margin-left:4px}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac);margin:0}
+.sc{overflow-x:auto;margin-bottom:6px}
+table{border-collapse:collapse;width:100%}
+th,td{padding:3px;font-size:12px;text-align:right;white-space:nowrap}
+th{font-weight:600;color:var(--mu)}
+td:first-child,th:first-child{text-align:left}
+.mt td input{min-width:78px}.mt td:first-child input{min-width:110px}
+.res th,.res td{border-top:1px solid var(--bd);padding:5px 6px}
+.res thead th{border-top:0;text-align:center}
+.ok{color:var(--ok);font-weight:600}.ng{color:var(--ng);font-weight:600}
+tr.hi,td.hi{background:var(--hi)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}.chips button{margin:0}.chips button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tabs{display:flex;gap:6px;overflow-x:auto;margin:10px 0}
+.tabs button{margin:0;flex:1;white-space:nowrap;padding:8px 12px}
+.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.pn{display:none}.pn.on{display:block}
+@keyframes up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+.pn.a .card,.pn.a>.mu,.pn.a>.p{animation:up .5s ease both}
+.pn.a .card:nth-child(2){animation-delay:.08s}.pn.a .card:nth-child(3){animation-delay:.16s}.pn.a .card:nth-child(n+4){animation-delay:.22s}
+@media(prefers-reduced-motion:reduce){.pn.a .card,.pn.a>.mu,.pn.a>.p{animation:none}}
+</style></head><body><main>
+<h1>Albion 闇市場クラフト利益計算</h1>
+<div class="mu">素材を買う → 都市でクラフト → 闇市場（カーレオン）に売る。空欄に価格を入れると都市別に比較します。入力は自動保存されます。</div>
+
+<nav class="tabs" id="tabs"><button data-t="set" class="on">設定</button><button data-t="buy">仕入れ</button><button data-t="mk">製造</button><button data-t="res">結果</button><button data-t="dat">データ</button></nav>
+<div class="pn on" id="p-set"><section class="card"><h2>共通設定</h2>
+<div class="g"><label>闇市場の販売税<select id="tax" data-path="tax"><option value="4">プレミアム 4%</option><option value="8">非プレミアム 8%</option></select></label></div>
+<div class="sc"><table><thead><tr><th>クラフト都市</th><th>素材返還率 %</th><th>製作手数料 (100ナッツあたり)</th></tr></thead><tbody id="cities"></tbody></table></div>
+<datalist id="rrrs"><option value="15.2"><option value="36.7"><option value="43.5"><option value="53.9"></datalist>
+<div class="mu">返還率の目安: 15.2=通常 / 36.7=専門都市 / 43.5=フォーカス / 53.9=専門+フォーカス（パッチで変わるので自由に修正可）。製作手数料 = アイテムバリュー × 0.1125 × 入力値 ÷ 100</div>
+</section>
+
+</div>
+<div class="pn" id="p-buy"><section class="card"><h2>最新価格を取得（アジアサーバー）</h2><div class="g"><label>闇市場の品質<select id="fq"><option value="1">普通</option><option value="2">良い</option><option value="3">優れた</option><option value="4">傑出した</option><option value="5">傑作</option></select></label></div><button class="p" data-a="fetch">最新価格を取得</button><div id="fmsg" class="mu" style="margin-top:6px">アイテムIDが入っている素材と製品の価格を、都市別の最安売値（闇市場は最高買値）で上書きします。</div></section><div id="buy"></div></div>
+<div class="pn" id="p-mk"><section class="card"><h2>レシピから追加</h2><div class="g"><label>種類<select id="ps-k"><option value="bag">洞察のカバン</option><option value="cape">派閥ケープ</option><option value="helm">プレートヘルメット</option></select></label><label>ティア<select id="ps-t"><option>4</option><option>5</option><option selected>6</option><option>7</option><option>8</option></select></label><label>エンチャント<select id="ps-e"><option value="0">.0（なし）</option><option value="1">.1</option><option value="2">.2</option><option value="3">.3</option><option value="4">.4</option><option value="all">全て（.0〜.4を一括）</option></select></label></div><div id="ps-fw" style="display:none;margin-bottom:8px"><div class="mu" style="margin-bottom:4px">派閥を選んでください</div><div class="chips" id="ps-fc"></div></div><button class="p" data-a="preset">この製品を追加</button><div class="mu" style="margin-top:6px">素材名と必要数が自動入力されます。価格・アイテムバリュー・闇市場価格は空欄です。</div></section><div id="prods"></div>
+<button class="p" data-a="addp">＋ 製品を追加</button></div>
+<div class="pn" id="p-res"><div class="mu">「同都市仕入れ」= その都市の素材価格でそのまま製作。「最安仕入れ」= 素材ごとに最安の都市で購入し、各都市で製作した場合。損益分岐 = 利益0になる闇市場価格。</div>
+<section class="card"><h2>製品ランキング</h2><div class="g"><label>並び順<select id="sort"><option value="v">1個あたり利益</option><option value="t">合計利益</option><option value="r">ROI</option></select></label></div><div id="sum" class="sc"></div></section>
+<div id="resl"></div></div>
+<div class="pn" id="p-dat"><section class="card"><h2>データ管理</h2>
+<textarea id="io" rows="3" placeholder="書き出したJSONをここに貼って「読み込み」"></textarea>
+<div style="margin-top:6px"><button data-a="exp" style="margin-left:0">書き出し</button><button data-a="imp">読み込み</button><button data-a="reset" id="rs">全消去</button> <span id="msg" class="mu"></span></div>
+</section></div>
+</main>
+<script>
+const C=["カーレオン","ブリッジウォッチ","フォートスターリング","ライムハースト","マートロック","セットフォード"];
+const KEY="albion-bm-v1";let S,arm=false;
+const $=s=>document.querySelector(s);
+const n=v=>{const x=parseFloat(v);return isFinite(x)?x:null};
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const f0=x=>x==null?"—":Math.round(x).toLocaleString("ja-JP");
+const f1=x=>x==null?"—":x.toFixed(1)+"%";
+const mm=()=>({name:"",qty:"",id:"",p:C.map(()=>"")});
+const mk=()=>({name:"",id:"",iv:"",bm:"",qty:1,mats:[mm(),mm(),mm()]});
+function load(){S=null;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+ if(!S||!S.products||!S.city)S={tax:4,city:C.map(()=>({rrr:15.2,fee:""})),products:[mk()]}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function setPath(o,path,v){const k=path.split(".");for(let i=0;i<k.length-1;i++)o=o[k[i]];o[k[k.length-1]]=v}
+function cheap(m){let b=null,bi=-1;m.p.forEach((v,i)=>{const x=n(v);if(x>0&&(b==null||x<b)){b=x;bi=i}});return{b,bi}}
+function calc(p){
+ const tax=n(S.tax)/100,iv=n(p.iv)||0,bm=n(p.bm),q=n(p.qty)||1;
+ const ms=p.mats.filter(m=>n(m.qty)>0),ch=ms.map(cheap);
+ const rev=bm==null?null:bm*(1-tax);
+ return C.map((_,i)=>{
+  const r=(n(S.city[i].rrr)||0)/100,fee=(n(S.city[i].fee)||0)*iv*0.1125/100;
+  let raw=0,ok=ms.length>0,raw2=0,ok2=ms.length>0;
+  ms.forEach((m,k)=>{const x=n(m.p[i]);if(x==null)ok=false;else raw+=x*n(m.qty);
+   if(ch[k].b==null)ok2=false;else raw2+=ch[k].b*n(m.qty)});
+  const f=(raw,ok)=>{if(!ok)return null;const cost=raw*(1-r)+fee,pr=rev==null?null:rev-cost;
+   return{cost,pr,roi:pr==null||!cost?null:pr/cost*100,be:cost/(1-tax),tot:pr==null?null:pr*q}};
+  return{a:f(raw,ok),b:f(raw2,ok2)}})}
+function prodHtml(p,i,m){
+ const P="products."+i;
+ return `<section class="card"><div class="bar"><b>${esc(p.name)||"製品 "+(i+1)}</b>${m=="mk"?`<span><button data-a="dup" data-i="${i}">複製</button><button data-a="delp" data-i="${i}">削除</button></span>`:""}</div>
+${m=="mk"?`<div class="g"><label>製品名<input data-path="${P}.name" value="${esc(p.name)}" placeholder="例: T6 ブロードソード"></label>
+<label>アイテムバリュー<input type="number" step="any" inputmode="decimal" data-path="${P}.iv" value="${esc(p.iv)}"></label>
+<label>闇市場の買い注文価格<input type="number" step="any" inputmode="decimal" data-path="${P}.bm" value="${esc(p.bm)}"></label>
+<label>製作個数<input type="number" step="any" inputmode="decimal" data-path="${P}.qty" value="${esc(p.qty)}"></label><label>アイテムID（価格取得用）<input data-path="${P}.id" value="${esc(p.id)}" placeholder="例 T6_BAG_INSIGHT@2"></label></div>`:""}
+${m=="buy"?`<div class="sc"><table class="mt"><thead><tr><th>素材名</th><th>必要数/個</th><th>ID</th>${C.map(c=>`<th>${c}</th>`).join("")}<th></th></tr></thead><tbody>
+${p.mats.map((m,j)=>`<tr><td><input data-path="${P}.mats.${j}.name" value="${esc(m.name)}"></td><td><input type="number" step="any" inputmode="decimal" data-path="${P}.mats.${j}.qty" value="${esc(m.qty)}"></td><td><input data-path="${P}.mats.${j}.id" value="${esc(m.id)}" placeholder="T4_CLOTH"></td>${C.map((_,k)=>`<td><input type="number" step="any" inputmode="decimal" data-path="${P}.mats.${j}.p.${k}" value="${esc(m.p[k])}"></td>`).join("")}<td><button data-a="delm" data-i="${i}" data-j="${j}">×</button></td></tr>`).join("")}
+</tbody></table></div><button data-a="addm" data-i="${i}" style="margin:0">＋ 素材を追加</button>`:""}${m=="res"?`<div id="r${i}" class="sc" style="margin-top:8px"></div>`:""}</section>`}
+function resHtml(p){
+ const R=calc(p);
+ const best=k=>{let b=-1,v=-Infinity;R.forEach((r,i)=>{const x=r[k]&&r[k].pr;if(x!=null&&x>v){v=x;b=i}});return b};
+ const ba=best("a"),bb=best("b");
+ if(!R.some(r=>r.a||r.b))return `<div class="mu">素材の必要数と価格、闇市場価格を入力すると結果が表示されます。</div>`;
+ const pc=x=>x==null?"":x>0?"ok":"ng";
+ const rows=R.map((r,i)=>{const a=r.a||{},b=r.b||{};
+  return `<tr class="${i==ba?"hi":""}"><th>${C[i]}</th><td>${f0(a.cost)}</td><td class="${pc(a.pr)}">${f0(a.pr)}</td><td class="${pc(a.roi)}">${f1(a.roi)}</td><td>${f0(a.tot)}</td><td>${f0(a.be)}</td><td>${f0(b.cost)}</td><td class="${pc(b.pr)} ${i==bb?"hi":""}">${f0(b.pr)}</td><td class="${pc(b.roi)}">${f1(b.roi)}</td></tr>`}).join("");
+ const cl=p.mats.filter(m=>n(m.qty)>0).map(m=>{const c=cheap(m);return c.b==null?"":`${esc(m.name||"素材")}→${C[c.bi]}(${f0(c.b)})`}).filter(Boolean).join(" / ");
+ return `<table class="res"><thead><tr><th></th><th colspan="5">同都市仕入れ</th><th colspan="3">最安仕入れ</th></tr><tr><th>製作都市</th><th>原価</th><th>利益</th><th>ROI</th><th>合計利益</th><th>損益分岐</th><th>原価</th><th>利益</th><th>ROI</th></tr></thead><tbody>${rows}</tbody></table>${cl?`<div class="mu" style="margin-top:4px">最安の仕入れ先: ${cl}</div>`:""}${shop(p,R,ba,bb)}`}
+function shop(p,R,ba,bb){
+ const q=n(p.qty)||1,va=ba>=0?R[ba].a.pr:-Infinity,vb=bb>=0?R[bb].b.pr:-Infinity;
+ if(va==-Infinity&&vb==-Infinity)return "";
+ const useB=vb>va,ci=useB?bb:ba,r=1-(n(S.city[ci].rrr)||0)/100;let tot=0;
+ const rows=p.mats.filter(m=>n(m.qty)>0).map(m=>{
+  const c=useB?cheap(m):{b:n(m.p[ci]),bi:ci},need=Math.ceil(n(m.qty)*q*r),cost=need*c.b;tot+=cost;
+  return `<tr><td>${esc(m.name||"素材")}</td><td>${need.toLocaleString("ja-JP")}</td><td>${C[c.bi]}</td><td>${f0(c.b)}</td><td>${f0(cost)}</td></tr>`}).join("");
+ return `<div class="mu" style="margin:10px 0 2px"><b>購入リスト</b>（${useB?"最安仕入れ":"同都市仕入れ"}・${C[ci]}で${q}個製作。手数料は含まず）</div><table class="res"><thead><tr><th>素材</th><th>必要数</th><th>購入都市</th><th>単価</th><th>小計</th></tr></thead><tbody>${rows}<tr><th>合計</th><td></td><td></td><td></td><td>${f0(tot)}</td></tr></tbody></table>`}
+function upd(){
+ S.products.forEach((p,i)=>{const e=$("#r"+i);if(e)e.innerHTML=resHtml(p)});
+ const pick=(R,k)=>{let b=null;R.forEach((r,i)=>{if(r[k]&&r[k].pr!=null&&(!b||r[k].pr>b.v))b={i,v:r[k].pr,t:r[k].tot,r:r[k].roi}});return b};
+ const rows=S.products.map(p=>{const R=calc(p);return{n:p.name||"(無題)",a:pick(R,"a"),b:pick(R,"b")}}).filter(x=>x.a||x.b)
+  .sort((x,y)=>{const k=$("#sort").value,s=z=>Math.max(z.a?z.a[k]:-1e18,z.b?z.b[k]:-1e18);return s(y)-s(x)});
+ const t=x=>x?`${C[x.i]} <span class="${x.v>0?"ok":"ng"}">${f0(x.v)}</span> <span class="mu">合計${f0(x.t)} / ROI ${f1(x.r)}</span>`:"—";
+ $("#sum").innerHTML=rows.length?`<table class="res"><thead><tr><th>製品</th><th>同都市仕入れ 最適都市</th><th>最安仕入れ 最適都市</th></tr></thead><tbody>${rows.map(x=>`<tr><th>${esc(x.n)}</th><td>${t(x.a)}</td><td>${t(x.b)}</td></tr>`).join("")}</tbody></table>`:`<div class="mu">まだ計算できる製品がありません。</div>`}
+function render(){
+ $("#cities").innerHTML=C.map((c,i)=>`<tr><td>${c}</td><td><input type="number" step="any" inputmode="decimal" list="rrrs" data-path="city.${i}.rrr" value="${esc(S.city[i].rrr)}"></td><td><input type="number" step="any" inputmode="decimal" data-path="city.${i}.fee" value="${esc(S.city[i].fee)}" placeholder="例: 500"></td></tr>`).join("");
+ $("#tax").value=String(S.tax);
+ $("#prods").innerHTML=S.products.map((p,i)=>prodHtml(p,i,"mk")).join("");
+ $("#buy").innerHTML=S.products.map((p,i)=>prodHtml(p,i,"buy")).join("");
+ $("#resl").innerHTML=S.products.map((p,i)=>prodHtml(p,i,"res")).join("");
+ upd()}
+document.addEventListener("input",e=>{const t=e.target;if(!t.dataset||!t.dataset.path)return;setPath(S,t.dataset.path,t.value);save();upd()});
+document.addEventListener("click",e=>{const t=e.target.closest("[data-a]");if(!t)return;
+ const a=t.dataset.a,i=+t.dataset.i,j=+t.dataset.j;$("#msg").textContent="";
+ if(a=="addp")S.products.push(mk());
+ else if(a=="dup")S.products.splice(i+1,0,JSON.parse(JSON.stringify(S.products[i])));
+ else if(a=="delp"){S.products.splice(i,1);if(!S.products.length)S.products.push(mk())}
+ else if(a=="fetch"){fetchPrices();return}
+ else if(a=="preset")preset();
+ else if(a=="addm")S.products[i].mats.push(mm());
+ else if(a=="delm")S.products[i].mats.splice(j,1);
+ else if(a=="exp"){$("#io").value=JSON.stringify(S);return}
+ else if(a=="imp"){try{const o=JSON.parse($("#io").value);if(!o.products||!o.city)throw 0;S=o}catch(x){$("#msg").textContent="読み込めませんでした";return}}
+ else if(a=="reset"){if(!arm){arm=true;t.textContent="もう一度押すと消去";setTimeout(()=>{arm=false;t.textContent="全消去"},3000);return}
+  arm=false;t.textContent="全消去";try{localStorage.removeItem(KEY)}catch(x){}load()}
+ save();render()});
+const FAC=[["マートロック","ハイランド","MARTLOCK","HIGHLAND"],["ブリッジウォッチ","ステップ","BRIDGEWATCH","STEPPE"],["ライムハースト","フォレスト","LYMHURST","FOREST"],["フォートスターリング","マウンテン","FORTSTERLING","MOUNTAIN"],["セットフォード","スワンプ","THETFORD","SWAMP"]];
+const TK={4:1,5:1,6:3,7:5,8:10};let psF=0;
+function build(k,t,e,f){
+ const T=`T${t}${e?"."+e:""}`;
+ const E=e?"@"+e:"",lv=e?`_LEVEL${e}`:"";
+ const M=(name,qty,id)=>({name,qty,id:id||"",p:C.map(()=>"")});
+ const p=mk();p.mats=[];
+ if(k=="bag"){p.id=`T${t}_BAG_INSIGHT${E}`;p.name=`${T} 洞察のカバン`;p.mats=[M(`${T} 布`,8,`T${t}_CLOTH${lv}${E}`),M(`${T} 革`,8,`T${t}_LEATHER${lv}${E}`),M("T4 洞察の書",1,"T4_SKILLBOOK_STANDARD")]}
+ if(k=="cape"){p.id=`T${t}_CAPEITEM_FW_${f[2]}${E}`;p.name=`${T} ${f[0]}ケープ`;p.mats=[M(`${T} ケープ`,1,`T${t}_CAPE${E}`),M(`T${t} ${f[0]}ケープ設計図(BP)`,1,`T${t}_CAPEITEM_FW_${f[2]}_BP`),M(`${f[1]}トークン`,TK[t],`T1_FACTION_${f[3]}_TOKEN_1`)]}
+ if(k=="helm"){p.id=`T${t}_HEAD_PLATE_SET1${E}`;p.name=`${T} プレートヘルメット`;p.mats=[M(`${T} 金属インゴット`,8,`T${t}_METALBAR${lv}${E}`)]}
+ return p}
+function preset(){
+ const k=$("#ps-k").value,t=+$("#ps-t").value,ev=$("#ps-e").value,f=FAC[psF];
+ const L=(ev=="all"?[0,1,2,3,4]:[+ev]).map(e=>build(k,t,e,f));
+ const b=S.products[0];
+ if(S.products.length==1&&!b.name&&!b.iv&&!b.bm&&b.mats.every(m=>!m.name&&!m.qty&&m.p.every(x=>!x)))S.products=L;else S.products.push(...L);
+ setTimeout(()=>{const c=document.querySelectorAll("#prods .card");if(c.length)c[c.length-1].scrollIntoView({behavior:"smooth",block:"start"})},60)}
+const HOST="https://east.albion-online-data.com",CA=["Caerleon","Bridgewatch","Fort Sterling","Lymhurst","Martlock","Thetford"];
+async function api(ids,locs,q){const r=await fetch(`${HOST}/api/v2/stats/prices/${ids.map(encodeURIComponent).join(",")}.json?locations=${locs.map(encodeURIComponent).join(",")}&qualities=${q}`);if(!r.ok)throw new Error("HTTP "+r.status);return r.json()}
+async function fetchPrices(){
+ const msg=$("#fmsg"),now=Date.now();let cnt=0,old=0;
+ const age=s=>{const t=Date.parse(/Z$/.test(s)?s:s+"Z");if(isNaN(t)||t<1e11)return;old=Math.max(old,now-t)};
+ try{
+  msg.textContent="取得中…";
+  const mids=[...new Set(S.products.flatMap(p=>p.mats.map(m=>m.id).filter(Boolean)))],pids=[...new Set(S.products.map(p=>p.id).filter(Boolean))];
+  if(!mids.length&&!pids.length){msg.textContent="アイテムIDが入力されていません。レシピから追加した製品はIDが自動で入ります。";return}
+  if(mids.length){const d=await api(mids,CA,1);S.products.forEach(p=>p.mats.forEach(m=>{if(m.id)d.forEach(x=>{const i=CA.indexOf(x.city);if(x.item_id==m.id&&i>=0&&x.sell_price_min>0){m.p[i]=String(x.sell_price_min);cnt++;age(x.sell_price_min_date)}})}))}
+  if(pids.length){const d=await api(pids,["Black Market"],$("#fq").value);S.products.forEach(p=>{const xs=p.id?d.filter(x=>x.item_id==p.id&&x.buy_price_max>0):[];if(xs.length){p.bm=String(Math.max(...xs.map(x=>x.buy_price_max)));cnt++;xs.forEach(x=>age(x.buy_price_max_date))}})}
+  save();render();
+  msg.textContent=cnt?`${cnt}件の価格を更新しました（最も古い価格は約${Math.round(old/36e5)}時間前）。データが無い都市は空欄のままです。`:"該当する価格データが見つかりませんでした。";
+ }catch(e){msg.textContent="取得できませんでした（"+e.message+"）。Claude内のプレビューでは外部通信がブロックされるため、GitHubに置いたページで試してください。"}}
+function tab(t){render();document.querySelectorAll(".pn").forEach(e=>{const on=e.id=="p-"+t;e.classList.toggle("on",on);e.classList.remove("a");if(on){void e.offsetWidth;e.classList.add("a");setTimeout(()=>e.classList.remove("a"),900)}});document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t==t))}
+document.addEventListener("click",e=>{const b=e.target.closest("#tabs button");if(b)tab(b.dataset.t)});
+$("#ps-fc").innerHTML=FAC.map((f,i)=>`<button data-fc="${i}" class="${i?"":"on"}">${f[0]}</button>`).join("");
+$("#ps-k").addEventListener("change",e=>{$("#ps-fw").style.display=e.target.value=="cape"?"block":"none"});
+$("#sort").addEventListener("change",()=>upd());
+document.addEventListener("click",e=>{const b=e.target.closest("[data-fc]");if(!b)return;psF=+b.dataset.fc;document.querySelectorAll("[data-fc]").forEach(x=>x.classList.toggle("on",x==b))});
+load();tab("set");
+</script></body></html>
